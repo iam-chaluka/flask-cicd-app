@@ -13,7 +13,7 @@ pipeline {
         }
         stage ('test'){
             steps {
-                sh 'pytest test_app.py -v' #--verbose to see a detailed output (test by test)
+                sh 'pytest test_app.py -v' //--verbose to see a detailed output (test by test)
             }
         }
         stage ('Lint'){
