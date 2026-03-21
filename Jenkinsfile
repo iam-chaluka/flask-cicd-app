@@ -6,7 +6,7 @@ pipeline {
                 checkout scm //pull the code from wherever repo this jenkins file came from
             }
         }
-        stage ('Install Dependencies'){
+        stage('Install Dependencies'){
             steps {
                 sh '''
                     python3 -m venv venv
@@ -15,21 +15,25 @@ pipeline {
                 '''
             }
         }
-        stage ('test'){
+        stage('test'){
             steps {
                 sh '''
-                    . venv/bin/activate
-                    python3 pytest test_app.py -v //--verbose to see a detailed output (test by test)
+                    bash -c "
+                        . venv/bin/activate
+                        python3 -m pytest test_app.py -v #--verbose to see a detailed output (test by test)
+                    "
                 '''
             }
         }
-        stage ('Lint'){
+        stage('Lint'){
             steps{
                 sh '''
-                    . venv/bin/activate
-                    python3 -m flake8 app.py --max-line-length=88
-                //Reads the code without executing it and checks against set of style and error rules define in 'PEP8'
-                //'PEP8' is Python's official style guide
+                    bash -c "
+                        . venv/bin/activate
+                        python3 -m flake8 app.py --max-line-length=88
+                        #Reads the code without executing it and checks against set of style and error rules define in 'PEP8'
+                        #'PEP8' is Python's official style guide
+                    "
                 '''
             }
         }
