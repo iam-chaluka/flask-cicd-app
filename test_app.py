@@ -11,7 +11,7 @@ def test_home(client):
     response = client.get('/')
     assert response.status_code == 200
     data = response.get_json()
-    assert data['status'] == 'broken'
+    assert data['status'] == 'ok'
 
 def test_health(client):
     response = client.get('/health')
