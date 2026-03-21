@@ -1,12 +1,27 @@
 pipeline {
     agent any
+
+    environment {
+        GHCR_IMAGE = "ghcr.io/wanniarachchichaluka/flask-cicd-app"
+    }
+
     stages {
-        stage('Checkout'){
+
+        stage('Checkout') {
             steps {
-                checkout scm //pull the code from wherever repo this jenkins file came from
+                checkout scm
             }
         }
-        stage('Install Dependencies'){
+
+        stage('Set Variables') {
+            steps {
+                script {
+                    env.GIT_SHA = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
             steps {
                 sh '''
                     python3 -m venv venv
@@ -15,31 +30,81 @@ pipeline {
                 '''
             }
         }
-        stage('test'){
+
+        stage('Test') {
             steps {
                 sh '''
-                    bash -c "
-                        . venv/bin/activate
-                        python3 -m pytest test_app.py -v #--verbose to see a detailed output (test by test)
-                    "
+                    . venv/bin/activate
+                    python3 -m pytest test_app.py -v
                 '''
             }
         }
-        stage('Lint'){
-            steps{
+
+        stage('Lint') {
+            steps {
                 sh '''
-                    bash -c "
-                        . venv/bin/activate
-                        python3 -m flake8 app.py --max-line-length=88
-                        #Reads the code without executing it and checks against set of style and error rules define in 'PEP8'
-                        #'PEP8' is Python's official style guide
-                    "
+                    . venv/bin/activate
+                    python3 -m flake8 app.py --max-line-length=88
                 '''
             }
         }
-        //test catches broke code
-        //Lint catches bad code
+
+        stage('Build Docker Image') {
+            steps {
+                sh """
+                    docker build -t ${GHCR_IMAGE}:${GIT_SHA} .
+                """
+            }
+        }
+
+        stage('Push to GHCR') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr-credentials',
+                    usernameVariable: 'GHCR_USER',
+                    passwordVariable: 'GHCR_TOKEN'
+                )]) {
+                    sh """
+                        echo \$GHCR_TOKEN | docker login ghcr.io -u \$GHCR_USER --password-stdin
+                        docker push ${GHCR_IMAGE}:${GIT_SHA}
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'ghcr-credentials',
+                    usernameVariable: 'GHCR_USER',
+                    passwordVariable: 'GHCR_TOKEN'
+                )]) {
+                    sh """
+                        echo \$GHCR_TOKEN | docker login ghcr.io -u \$GHCR_USER --password-stdin
+                        docker pull ${GHCR_IMAGE}:${GIT_SHA}
+                        docker stop flask-staging || true
+                        docker rm flask-staging || true
+                        docker run -d \
+                            --name flask-staging \
+                            -p 5000:5000 \
+                            --restart unless-stopped \
+                            ${GHCR_IMAGE}:${GIT_SHA}
+                    """
+                }
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh '''
+                    sleep 5
+                    curl -f http://localhost:5000/health
+                '''
+            }
+        }
+
     }
+
     post {
         success {
             echo 'Pipeline ran successfully'
